@@ -5,15 +5,15 @@
     "dirty" : false,
     "encoding" : "UTF-8",
     "folds" : "",
-    "hash" : "2092918618",
+    "hash" : "4015784301",
     "id" : "86D2F1C",
-    "lastKnownWriteTime" : 1526098743,
-    "last_content_update" : 1526098743829,
+    "lastKnownWriteTime" : 1526099313,
+    "last_content_update" : 1526099313441,
     "path" : "~/git/dataViz/DataViz_Final_Take_Home/Vaccinations/app.R",
     "project_path" : "Vaccinations/app.R",
     "properties" : {
-        "cursorPosition" : "274,23",
-        "scrollLine" : "267"
+        "cursorPosition" : "183,32",
+        "scrollLine" : "175"
     },
     "relative_order" : 3,
     "source_on_save" : false,

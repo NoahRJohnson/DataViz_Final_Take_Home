@@ -7,14 +7,14 @@
     "folds" : "",
     "hash" : "0",
     "id" : "8E86A6CF",
-    "lastKnownWriteTime" : 1526097043,
-    "last_content_update" : 1526097043755,
+    "lastKnownWriteTime" : 1526099261,
+    "last_content_update" : 1526099261211,
     "path" : "~/git/dataViz/DataViz_Final_Take_Home/final.Rmd",
     "project_path" : "final.Rmd",
     "properties" : {
-        "cursorPosition" : "376,48",
+        "cursorPosition" : "276,9",
         "last_setup_crc32" : "4B2AF752a9bc3399",
-        "scrollLine" : "366"
+        "scrollLine" : "269"
     },
     "relative_order" : 2,
     "source_on_save" : false,

@@ -178,17 +178,17 @@ viz.choropleth.diseases.DTaP <- diseases.DTaP.over.year %>% plot_geo(locationmod
 
 MMR.avg.over.state <- MMR %>% 
   select(as.character(1995:2002)) %>%  # get the rate data for years we have data for
-  summarise_all(funs(mean(.))) %>%  # grab column means
+  summarise_all(funs(mean(., na.rm=TRUE))) %>%  # grab column means
   reshape2::melt()
 
 HepA.avg.over.state <- HepA %>% 
   select(as.character(2002:2011)) %>%  # get the rate data for each year
-  summarise_all(funs(mean(.))) %>%  # grab column means
+  summarise_all(funs(mean(., na.rm=TRUE))) %>%  # grab column means
   reshape2::melt()
 
 DTaP.avg.over.state <- DTaP %>% 
   select(as.character(1995:2011)) %>%  # get the rate data for each year
-  summarise_all(funs(mean(.))) %>%  # grab column means
+  summarise_all(funs(mean(., na.rm=TRUE))) %>%  # grab column means
   reshape2::melt()
 
 viz.ts.MMR <- MMR.avg.over.state %>% 
