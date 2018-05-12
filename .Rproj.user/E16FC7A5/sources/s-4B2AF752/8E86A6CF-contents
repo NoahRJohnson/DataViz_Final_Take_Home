@@ -1,0 +1,382 @@
+---
+title: "Final Exam Take Home"
+subtitle: "Data Visualization"
+author: "Noah Johnson"
+date: "May 10, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(install.load)
+install_load('dslabs')
+install_load('tidyverse')
+install_load('plotly')
+```
+
+## Exploring The Data
+
+### Contagious Diseases
+
+Yearly counts for Hepatitis A, Measles, Mumps, Pertussis, Polio, Rubella, and Small for US states.
+
+```{r}
+str(us_contagious_diseases)
+
+levels(us_contagious_diseases$disease)
+
+sort(unique(us_contagious_diseases$year))
+```
+
+### Vaccinations
+
+CDC child vaccination coverage data for the Measles, Mumps, and Rubella (MMR),
+Hepatitis A (HepA), and Diphtheria toxoid, Tetanus toxoid, acellular Pertussis (DTaP) vaccines.
+
+```{r}
+load(file="data/MMR.Rda")
+load(file="data/HepA.Rda")
+load(file="data/DTaP.Rda")
+
+head(MMR)
+head(HepA)
+head(DTaP)
+```
+
+## Pre-Processing the Data
+
+### Contagious Diseases
+
+The vaccine data goes from 1995 - 2016, but the contagious diseases data set only goes up until 2011. So we'll just select data from the intersection years of 1995 - 2011.
+
+```{r}
+diseases <- us_contagious_diseases %>% filter(1995 <= year & year <= 2011)
+```
+
+Further refinement is needed for HepA vaccine coverage, for which we only have 2002-2016 data, and so we'll select the years of 2002-2011 for this disease.
+
+```{r}
+diseases <- diseases %>% 
+  filter(!(disease == 'Hepatitis A' & year < 2002))
+```
+
+We're interested in relative difference in disease rates per state, so let's compute percentages. Since the counts are yearly, and most observations didn't get a full year worth of data, we'll weight the percentage by weeks reported.
+
+```{r}
+diseases <- diseases %>% mutate(weighted_rate = (count*52 / weeks_reporting) / population)
+```
+
+We're going to work with three groups of disease, so let's make those now. The Polio data is bad, so we're ignoring it. And the Smallpox disease won't be useful in our visualizations because it has been wiped out, and no vaccines have been administered for it since 1971.
+
+```{r}
+diseases.MMR <- diseases %>% 
+  filter(disease == 'Measles' | 
+         disease == 'Mumps' | 
+         disease == 'Rubella') %>% 
+  select(state, year, weighted_rate)
+
+diseases.HepA <- diseases %>% 
+  filter(disease == 'Hepatitis A') %>% 
+  select(state, year, weighted_rate)
+
+diseases.DTaP <- diseases %>% 
+  filter(disease == 'Pertussis') %>% 
+  select(state, year, weighted_rate)
+
+head(diseases.MMR)
+head(diseases.HepA)
+head(diseases.DTaP)
+```
+
+### Vaccinations
+
+Is there no HepA data for the years 2000-2001, or is it just the first 6 rows which are NA?
+
+```{r}
+all(is.na(HepA$'2000'))
+all(is.na(HepA$'2001'))
+```
+
+Ok, so those columns are useless. We'll remove them in just a bit.
+
+The vaccine data goes from 1995 - 2016, but the contagious diseases data set only goes up until 2011. So we'll just select data from the intersection years of 1995 - 2011 (2002 - 2011 for Hepatitis A).
+
+```{r}
+MMR <- MMR %>% select(state, as.character(1995:2002))
+
+HepA <- HepA %>% select(state, as.character(2002:2011)) # also remove first two column of NA's
+
+DTaP <- DTaP %>% select(state, as.character(1995:2011))
+```
+
+### Choropleth Maps
+
+We could make a bunch of different choropleth maps for every year, and have something like a year slider in a Shiny app as a selector. But the instructions imply that that would be too many vizzes.
+
+So instead we'll average our variables of interest across all the years, and produce just six choropleth
+maps: three for the average vaccine rate, and three for the average disease rate (three disease groupings).
+
+First we must process the data. Compute an average of vaccine rate for each state and
+disease grouping:
+
+```{r}
+postal_abbreviations <- c("AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY")
+
+MMR.avg.over.year <- MMR %>% select(as.character(1995:2002)) %>% rowMeans(na.rm = TRUE)
+
+MMR$avg.year <- MMR.avg.over.year
+MMR$state.abr <- postal_abbreviations
+
+MMR.avg.over.year <- MMR %>% select(state.abr, avg.year)
+head(MMR.avg.over.year)
+
+HepA.avg.over.year <- HepA %>% select(as.character(2002:2011)) %>% rowMeans(na.rm = TRUE)
+
+HepA$avg.year <- HepA.avg.over.year
+HepA$state.abr <- postal_abbreviations
+
+HepA.avg.over.year <- HepA %>% select(state.abr, avg.year)
+head(HepA.avg.over.year)
+
+DTaP.avg.over.year <- DTaP %>% select(as.character(1995:2011)) %>% rowMeans(na.rm = TRUE)
+
+DTaP$avg.year <- DTaP.avg.over.year
+DTaP$state.abr <- postal_abbreviations
+
+DTaP.avg.over.year <- DTaP %>% select(state.abr, avg.year)
+head(DTaP.avg.over.year)
+```
+
+Now produce the Vaccine Rate choropleths:
+
+```{r}
+
+# give state boundaries a white border
+l <- list(color = toRGB("white"), width = 2)
+
+# specify some map projection/options
+g <- list(
+  scope = 'usa',
+  projection = list(type = 'albers usa'),
+  showlakes = TRUE,
+  lakecolor = toRGB('white')
+)
+
+p.MMR <- MMR.avg.over.year %>% plot_geo(locationmode = 'USA-states') %>%
+  add_trace(
+    z = ~avg.year, locations = ~state.abr, #text = ~hover,
+    color = ~avg.year, colors = 'Purples'
+  ) %>%
+  colorbar(title = "Percent<br>Vaccine<br>Coverage") %>%
+  layout(
+    title = 'Average MMR Vaccine Coverage<br>Among Children 19-35 Months Old<br>(1995 - 2002)',
+    geo = g
+  )
+
+p.MMR
+
+p.HepA <- HepA.avg.over.year %>% plot_geo(locationmode = 'USA-states') %>%
+  add_trace(
+    z = ~avg.year, locations = ~state.abr, #text = ~hover,
+    color = ~avg.year, colors = 'Purples'
+  ) %>%
+  colorbar(title = "Percent<br>Vaccine<br>Coverage") %>%
+  layout(
+    title = 'Average Hepatitis A Vaccine Coverage<br>Among Children 19-35 Months Old<br>(2002 - 2011)',
+    geo = g
+  )
+
+p.HepA
+
+p.DTaP <- DTaP.avg.over.year %>% plot_geo(locationmode = 'USA-states') %>%
+  add_trace(
+    z = ~avg.year, locations = ~state.abr, #text = ~hover,
+    color = ~avg.year, colors = 'Purples'
+  ) %>%
+  colorbar(title = "Percent<br>Vaccine<br>Coverage") %>%
+  layout(
+    title = 'Average DTaP Vaccine Coverage<br>Among Children 19-35 Months Old<br>(1995 - 2011)',
+    geo = g
+  )
+
+p.DTaP
+```
+
+Next we'll do the same for disease rates:
+
+```{r}
+diseases.MMR.over.year <- diseases.MMR %>% 
+  group_by(state) %>% 
+  summarise(avg.year = mean(weighted_rate, na.rm=TRUE))
+diseases.MMR.over.year$state.abr <- postal_abbreviations
+
+diseases.HepA.over.year <- diseases.HepA %>% 
+  group_by(state) %>% 
+  summarise(avg.year = mean(weighted_rate, na.rm=TRUE))
+diseases.HepA.over.year$state.abr <- postal_abbreviations
+
+diseases.DTaP.over.year <- diseases.DTaP %>% 
+  group_by(state) %>% 
+  summarise(avg.year = mean(weighted_rate, na.rm=TRUE))
+diseases.DTaP.over.year$state.abr <- postal_abbreviations
+
+head(diseases.MMR.over.year)
+head(diseases.HepA.over.year)
+head(diseases.DTaP.over.year)
+```
+
+```{r}
+p.diseases.MMR <- diseases.MMR.over.year %>% plot_geo(locationmode = 'USA-states') %>%
+  add_trace(
+    z = ~avg.year, locations = ~state.abr,
+    color = ~avg.year, colors = 'Purples'
+  ) %>%
+  colorbar(title = "Percent<br>Occurrence") %>%
+  layout(
+    title = 'Average Measles, Mumps, or Rubella Rates<br>(1995 - 2002)',
+    geo = g
+  )
+
+p.diseases.MMR
+
+p.diseases.HepA <- diseases.HepA.over.year %>% plot_geo(locationmode = 'USA-states') %>%
+  add_trace(
+    z = ~avg.year, locations = ~state.abr,
+    color = ~avg.year, colors = 'Purples'
+  ) %>%
+  colorbar(title = "Percent<br>Occurrence") %>%
+  layout(
+    title = 'Average Hepatitis A Rates<br>(2002 - 2011)',
+    geo = g
+  )
+
+p.diseases.HepA
+
+p.diseases.DTaP <- diseases.DTaP.over.year %>% plot_geo(locationmode = 'USA-states') %>%
+  add_trace(
+    z = ~avg.year, locations = ~state.abr,
+    color = ~avg.year, colors = 'Purples'
+  ) %>%
+  colorbar(title = "Percent<br>Occurrence") %>%
+  layout(
+    title = 'Average Pertussis (Whooping Cough) Rates<br>(1995 - 2011)',
+    geo = g
+  )
+
+p.diseases.DTaP
+```
+
+### Time Series
+
+Now we will just focus on the time axis, by averaging our variables of interest across all
+50 states (and D.C.). Just as before we'll get six vizzes in total. Don't worry, this will
+look a whole lot less cluttered when put into a Shiny app and grouped onto three different
+pages.
+
+First, the average vaccine rates for the whole U.S.:
+
+```{r}
+MMR.avg.over.state <- MMR %>% 
+  select(as.character(1995:2002)) %>%  # get the rate data for years we have data for
+  summarise_all(funs(mean(.))) %>%  # grab column means
+  reshape2::melt()
+
+HepA.avg.over.state <- HepA %>% 
+  select(as.character(2002:2011)) %>%  # get the rate data for each year
+  summarise_all(funs(mean(.))) %>%  # grab column means
+  reshape2::melt()
+
+DTaP.avg.over.state <- DTaP %>% 
+  select(as.character(1995:2011)) %>%  # get the rate data for each year
+  summarise_all(funs(mean(.))) %>%  # grab column means
+  reshape2::melt()
+
+p.ts.MMR <- MMR.avg.over.state %>% 
+  plot_ly(x = ~variable,
+          y = ~value, 
+          type = 'scatter',
+          mode = 'lines'
+          ) %>%
+  layout(title = "Average US MMR Vaccine Coverage<br>Among Children 19-35 Months Old",
+         xaxis = list(title="Year"), 
+         yaxis = list(title="Percent Coverage"))
+
+p.ts.HepA <- HepA.avg.over.state %>% 
+  plot_ly(x = ~variable,
+          y = ~value, 
+          type = 'scatter',
+          mode = 'lines'
+          ) %>%
+  layout(title = "Average US Hepatitis A Vaccine Coverage<br>Among Children 19-35 Months Old",
+         xaxis = list(title="Year"), 
+         yaxis = list(title="Percent Coverage"))
+
+p.ts.DTaP <- DTaP.avg.over.state %>% 
+  plot_ly(x = ~variable,
+          y = ~value, 
+          type = 'scatter',
+          mode = 'lines'
+          ) %>%
+  layout(title = "Average US DTaP Vaccine Coverage<br>Among Children 19-35 Months Old",
+         xaxis = list(title="Year"), 
+         yaxis = list(title="Percent Coverage"))
+
+p.ts.MMR
+p.ts.HepA
+p.ts.DTaP
+```
+
+Next, the average disease rates for the whole U.S.:
+
+```{r}
+diseases.MMR.avg.over.state <- diseases.MMR %>% 
+  group_by(year) %>% 
+  summarise(avg.state = mean(weighted_rate, na.rm=TRUE)) %>% 
+  drop_na()
+
+diseases.HepA.avg.over.state <- diseases.HepA %>% 
+  group_by(year) %>% 
+  summarise(avg.state = mean(weighted_rate, na.rm=TRUE)) %>% 
+  drop_na()
+
+diseases.DTaP.avg.over.state <- diseases.DTaP %>% 
+  group_by(year) %>% 
+  summarise(avg.state = mean(weighted_rate, na.rm=TRUE)) %>% 
+  drop_na()
+
+
+p.ts.diseases.MMR <- diseases.MMR.avg.over.state %>% 
+  plot_ly(x = ~year,
+          y = ~avg.state, 
+          type = 'scatter',
+          mode = 'lines'
+          ) %>%
+  layout(title = "Average Measles, Mumps, or Rubella Rates<br>(1995 - 2002)",
+         xaxis = list(title="Year"), 
+         yaxis = list(title="Percent Coverage"))
+
+p.ts.diseases.HepA <- diseases.HepA.avg.over.state %>% 
+  plot_ly(x = ~year,
+          y = ~avg.state, 
+          type = 'scatter',
+          mode = 'lines'
+          ) %>%
+  layout(title = "Average Hepatitis A Rates<br>(2002 - 2011)",
+         xaxis = list(title="Year"), 
+         yaxis = list(title="Percent Coverage"))
+
+p.ts.diseases.DTaP <- diseases.DTaP.avg.over.state %>% 
+  plot_ly(x = ~year,
+          y = ~avg.state, 
+          type = 'scatter',
+          mode = 'lines'
+          ) %>%
+  layout(title = "Average Pertussis (Whooping Cough) Rates<br>(1995 - 2011)",
+         xaxis = list(title="Year"), 
+         yaxis = list(title="Percent Coverage"))
+
+p.ts.diseases.MMR
+p.ts.diseases.HepA
+p.ts.diseases.DTaP
+```

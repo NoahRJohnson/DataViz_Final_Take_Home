@@ -1,0 +1,2 @@
+"0","diseases <- diseases %>% "
+"0","  filter(!(disease == 'Hepatitis A' & year < 2002))"

@@ -1,0 +1,12 @@
+name: Vaccinations
+title: Vaccinations
+username:
+account: noahrjohnson
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 341752
+bundleId: 1370016
+url: https://noahrjohnson.shinyapps.io/Vaccinations/
+when: 1526097190.46613
+asMultiple: FALSE
+asStatic: FALSE

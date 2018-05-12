@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1526092759720.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "86D2F1C",
+    "lastKnownWriteTime" : 1526092646,
+    "last_content_update" : 1526092646,
+    "path" : "~/git/dataViz/DataViz_Final_Take_Home/Vaccinations/app.R",
+    "project_path" : "Vaccinations/app.R",
+    "properties" : {
+        "cursorPosition" : "7,37",
+        "scrollLine" : "0"
+    },
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

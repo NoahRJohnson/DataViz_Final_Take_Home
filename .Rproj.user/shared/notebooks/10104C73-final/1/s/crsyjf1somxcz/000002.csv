@@ -1,0 +1,4 @@
+"0","load(file=""data/MMR.Rda"")"
+"0","load(file=""data/HepA.Rda"")"
+"0","load(file=""data/DTaP.Rda"")"
+"0","head(MMR)"

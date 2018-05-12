@@ -1,0 +1,1 @@
+"0","diseases <- diseases %>% mutate(weighted_rate = (count*52 / weeks_reporting) / population)"

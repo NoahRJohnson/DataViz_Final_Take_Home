@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1526013816785.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "A3A90D55",
+    "lastKnownWriteTime" : 1526024091,
+    "last_content_update" : 1526024091279,
+    "path" : "~/git/dataViz/DataViz_Final_Take_Home/clean_vaccine_data.R",
+    "project_path" : "clean_vaccine_data.R",
+    "properties" : {
+        "cursorPosition" : "51,49",
+        "scrollLine" : "49"
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

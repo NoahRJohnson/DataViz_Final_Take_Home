@@ -1,0 +1,3 @@
+"0","MMR <- MMR %>% select(state, as.character(1995:2011))"
+"0","HepA <- HepA %>% select(state, as.character(2002:2011)) # also remove first two column of NA's"
+"0","DTaP <- DTaP %>% select(state, as.character(1995:2011))"
