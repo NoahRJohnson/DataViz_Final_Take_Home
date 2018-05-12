@@ -1,138 +1,307 @@
 library(shiny)
 library(tidyverse)
-library(networkD3)
-library(ggplot2)
 library(plotly)
+library(dslabs)
 
-# Load data for vizzes
-load(file = "data/friendsmatrix.Rda")
-load(file = "data/networkIDmapping.Rda")
-load(file = "data/groups.Rda")
-load(file = "data/affiliations.Rda")
-load(file = "data/proximityEvents.Rda")
-load(file = "data/list_ofplots.Rda")
-load(file = "data/subjects_linegraph.Rda")
-load(file = "data/predictabilityResponses.Rda")
-load(file = "data/heatmap_list.Rda")
-load(file = "data/texts.Rda")
-
-
+# Load Vaccine data
+load(file="data/MMR.Rda")
+load(file="data/HepA.Rda")
+load(file="data/DTaP.Rda")
 
 #####################################################
-###       Create friendship network graph         ###
+###       Prepare Data                            ###
 #####################################################
 
-N <- nrow(friends)
+diseases <- us_contagious_diseases %>% filter(1995 <= year & year <= 2011)
 
-sources <- c()
-targets <- c()
-values <- c()
+diseases <- diseases %>% 
+  filter(!(disease == 'Hepatitis A' & year < 2002))
 
-# Generate links
-k <- 1
-for (i in 1:N) {
-  for (j in 1:N) {
-    if (!is.na(friends[i,j])) {
-      sources[k] <- i-1 # forceNetwork requires 0 indexing
-      targets[k] <- j-1
-      values[k] <- log(proximity.events[i,j] + proximity.events[j,i] + 1) + 1 # pad by 1 so there's no zero-width links
-      k <- k + 1
-    }
-  }
-}
+diseases <- diseases %>% mutate(weighted_rate = (count*52 / weeks_reporting) / population)
 
-# Count number of friends for every subject in the network
-sizes <- sapply(1:N, function(s) return (exp(sum(targets + 1 == s))), USE.NAMES = FALSE)
+diseases.MMR <- diseases %>% 
+  filter(disease == 'Measles' | 
+           disease == 'Mumps' | 
+           disease == 'Rubella') %>% 
+  select(state, year, weighted_rate)
 
-# Create df for nodes (1 per subject)
-friendNodes <- data.frame(subjectID = mapped_ids, size = sizes, group = affiliations)
+diseases.HepA <- diseases %>% 
+  filter(disease == 'Hepatitis A') %>% 
+  select(state, year, weighted_rate)
 
-# Create df for links
-friendLinks <- data.frame(source = sources, target = targets, value = values)
+diseases.DTaP <- diseases %>% 
+  filter(disease == 'Pertussis') %>% 
+  select(state, year, weighted_rate)
 
-viz.forceNetwork <- forceNetwork(Links = friendLinks, Nodes = friendNodes, Source = "source", 
-                                 Target = "target", Value = "value", NodeID = "subjectID", 
-                                 Nodesize = "size", Group = "group", 
-                                 linkWidth = JS("function(d) { return Math.sqrt(d.value); }"), 
-                                 arrows = TRUE, legend = TRUE, zoom = T, 
-                                 opacity = 1, opacityNoHover = 1, charge = -30, 
-                                 height = 10000, width = 10000)
+MMR <- MMR %>% select(state, as.character(1995:2002))
+
+HepA <- HepA %>% select(state, as.character(2002:2011)) # also remove first two column of NA's
+
+DTaP <- DTaP %>% select(state, as.character(1995:2011))
+
+postal_abbreviations <- c("AL", "AK", "AZ", "AR", "CA", 
+                          "CO", "CT", "DE", "DC", "FL", 
+                          "GA", "HI", "ID", "IL", "IN", 
+                          "IA", "KS", "KY", "LA", "ME", 
+                          "MD", "MA", "MI", "MN", "MS", 
+                          "MO", "MT", "NE", "NV", "NH", 
+                          "NJ", "NM", "NY", "NC", "ND", 
+                          "OH", "OK", "OR", "PA", "RI", 
+                          "SC", "SD", "TN", "TX", "UT", 
+                          "VT", "VA", "WA", "WV", "WI", 
+                          "WY")
 
 #####################################################
-###            Create box plot viz                ###
+###            Create Choropleths                 ###
 #####################################################
 
-# Manually calculate IQR and quartiles so we can find outliers
-vals <- texts %>% 
-  group_by(response) %>% 
-  summarise(iqr = IQR(num), upper.quartile = quantile(num, probs=0.75),
-            lower.quartile = quantile(num, probs=0.25)) %>% 
-  mutate(outlier.bound.lower = pmax(0, (lower.quartile - (1.5 * iqr))),
-         outlier.bound.upper = upper.quartile + 1.5 * iqr)
+MMR.avg.over.year <- MMR %>% select(as.character(1995:2002)) %>% rowMeans(na.rm = TRUE)
 
-# This is a kludge. looping through all factor levels to get data frame of outliers
-outliers <- data.frame(id=c(), response=c(), num=c())
-for (i in 1:nrow(vals)) {
-  tmp <- texts %>% filter(response == vals$response[i])
-  outliers <- bind_rows(outliers, 
-                        tmp %>% filter(num < vals$outlier.bound.lower[i])
+MMR$avg.year <- MMR.avg.over.year
+MMR$state.abr <- postal_abbreviations
+
+MMR.avg.over.year <- MMR %>% select(state.abr, avg.year)
+head(MMR.avg.over.year)
+
+HepA.avg.over.year <- HepA %>% select(as.character(2002:2011)) %>% rowMeans(na.rm = TRUE)
+
+HepA$avg.year <- HepA.avg.over.year
+HepA$state.abr <- postal_abbreviations
+
+HepA.avg.over.year <- HepA %>% select(state.abr, avg.year)
+head(HepA.avg.over.year)
+
+DTaP.avg.over.year <- DTaP %>% select(as.character(1995:2011)) %>% rowMeans(na.rm = TRUE)
+
+DTaP$avg.year <- DTaP.avg.over.year
+DTaP$state.abr <- postal_abbreviations
+
+DTaP.avg.over.year <- DTaP %>% select(state.abr, avg.year)
+
+# give state boundaries a white border
+l <- list(color = toRGB("white"), width = 2)
+
+# specify some map projection/options
+g <- list(
+  scope = 'usa',
+  projection = list(type = 'albers usa'),
+  showlakes = TRUE,
+  lakecolor = toRGB('white')
+)
+
+viz.choropleth.MMR <- MMR.avg.over.year %>% plot_geo(locationmode = 'USA-states') %>%
+  add_trace(
+    z = ~avg.year, locations = ~state.abr, #text = ~hover,
+    color = ~avg.year, colors = 'Purples'
+  ) %>%
+  colorbar(title = "Percent<br>Vaccine<br>Coverage") %>%
+  layout(
+    title = 'Average MMR Vaccine Coverage<br>Among Children 19-35 Months Old<br>(1995 - 2002)',
+    geo = g
   )
-  outliers <- bind_rows(outliers, 
-                        tmp %>% filter(num > vals$outlier.bound.upper[i])
-  )
-}
 
-# Box plot with scatter points of outliers added on top with proper tooltip
-viz.boxplot <- plot_ly(texts, 
-        y = ~num, x=~response, 
-        color = ~response, 
-        type = "box", 
-        hoverinfo = "y") %>%
-  add_markers(data = outliers, hoverinfo = "text", text = paste(outliers$num, "\nID: ", outliers[,'id'])) %>% 
-  plotly::layout(title = '"How often do you send text messages?"', 
-                 xaxis = list(title = "Response"), 
-                 yaxis = list(title = "Avg. text msgs / month"),
-                 hovermode = "closest"
+viz.choropleth.HepA <- HepA.avg.over.year %>% plot_geo(locationmode = 'USA-states') %>%
+  add_trace(
+    z = ~avg.year, locations = ~state.abr, #text = ~hover,
+    color = ~avg.year, colors = 'Purples'
+  ) %>%
+  colorbar(title = "Percent<br>Vaccine<br>Coverage") %>%
+  layout(
+    title = 'Average Hepatitis A Vaccine Coverage<br>Among Children 19-35 Months Old<br>(2002 - 2011)',
+    geo = g
   )
+
+viz.choropleth.DTaP <- DTaP.avg.over.year %>% plot_geo(locationmode = 'USA-states') %>%
+  add_trace(
+    z = ~avg.year, locations = ~state.abr, #text = ~hover,
+    color = ~avg.year, colors = 'Purples'
+  ) %>%
+  colorbar(title = "Percent<br>Vaccine<br>Coverage") %>%
+  layout(
+    title = 'Average DTaP Vaccine Coverage<br>Among Children 19-35 Months Old<br>(1995 - 2011)',
+    geo = g
+  )
+
+diseases.MMR.over.year <- diseases.MMR %>% 
+  group_by(state) %>% 
+  summarise(avg.year = mean(weighted_rate, na.rm=TRUE))
+diseases.MMR.over.year$state.abr <- postal_abbreviations
+
+diseases.HepA.over.year <- diseases.HepA %>% 
+  group_by(state) %>% 
+  summarise(avg.year = mean(weighted_rate, na.rm=TRUE))
+diseases.HepA.over.year$state.abr <- postal_abbreviations
+
+diseases.DTaP.over.year <- diseases.DTaP %>% 
+  group_by(state) %>% 
+  summarise(avg.year = mean(weighted_rate, na.rm=TRUE))
+diseases.DTaP.over.year$state.abr <- postal_abbreviations
+
+viz.choropleth.diseases.MMR <- diseases.MMR.over.year %>% plot_geo(locationmode = 'USA-states') %>%
+  add_trace(
+    z = ~avg.year, locations = ~state.abr,
+    color = ~avg.year, colors = 'Purples'
+  ) %>%
+  colorbar(title = "Percent<br>Occurrence") %>%
+  layout(
+    title = 'Average Measles, Mumps, or Rubella Rates<br>(1995 - 2002)',
+    geo = g
+  )
+
+viz.choropleth.diseases.HepA <- diseases.HepA.over.year %>% plot_geo(locationmode = 'USA-states') %>%
+  add_trace(
+    z = ~avg.year, locations = ~state.abr,
+    color = ~avg.year, colors = 'Purples'
+  ) %>%
+  colorbar(title = "Percent<br>Occurrence") %>%
+  layout(
+    title = 'Average Hepatitis A Rates<br>(2002 - 2011)',
+    geo = g
+  )
+
+
+viz.choropleth.diseases.DTaP <- diseases.DTaP.over.year %>% plot_geo(locationmode = 'USA-states') %>%
+  add_trace(
+    z = ~avg.year, locations = ~state.abr,
+    color = ~avg.year, colors = 'Purples'
+  ) %>%
+  colorbar(title = "Percent<br>Occurrence") %>%
+  layout(
+    title = 'Average Pertussis (Whooping Cough) Rates<br>(1995 - 2011)',
+    geo = g
+  )
+
+
+#####################################################
+###            Create Time Series                 ###
 #####################################################
 
+MMR.avg.over.state <- MMR %>% 
+  select(as.character(1995:2002)) %>%  # get the rate data for years we have data for
+  summarise_all(funs(mean(.))) %>%  # grab column means
+  reshape2::melt()
+
+HepA.avg.over.state <- HepA %>% 
+  select(as.character(2002:2011)) %>%  # get the rate data for each year
+  summarise_all(funs(mean(.))) %>%  # grab column means
+  reshape2::melt()
+
+DTaP.avg.over.state <- DTaP %>% 
+  select(as.character(1995:2011)) %>%  # get the rate data for each year
+  summarise_all(funs(mean(.))) %>%  # grab column means
+  reshape2::melt()
+
+viz.ts.MMR <- MMR.avg.over.state %>% 
+  plot_ly(x = ~variable,
+          y = ~value, 
+          type = 'scatter',
+          mode = 'lines'
+  ) %>%
+  layout(title = "Average US MMR Vaccine Coverage<br>Among Children 19-35 Months Old",
+         xaxis = list(title="Year"), 
+         yaxis = list(title="Percent Coverage"))
+
+viz.ts.HepA <- HepA.avg.over.state %>% 
+  plot_ly(x = ~variable,
+          y = ~value, 
+          type = 'scatter',
+          mode = 'lines'
+  ) %>%
+  layout(title = "Average US Hepatitis A Vaccine Coverage<br>Among Children 19-35 Months Old",
+         xaxis = list(title="Year"), 
+         yaxis = list(title="Percent Coverage"))
+
+viz.ts.DTaP <- DTaP.avg.over.state %>% 
+  plot_ly(x = ~variable,
+          y = ~value, 
+          type = 'scatter',
+          mode = 'lines'
+  ) %>%
+  layout(title = "Average US DTaP Vaccine Coverage<br>Among Children 19-35 Months Old",
+         xaxis = list(title="Year"), 
+         yaxis = list(title="Percent Coverage"))
+
+diseases.MMR.avg.over.state <- diseases.MMR %>% 
+  group_by(year) %>% 
+  summarise(avg.state = mean(weighted_rate, na.rm=TRUE)) %>% 
+  drop_na()
+
+diseases.HepA.avg.over.state <- diseases.HepA %>% 
+  group_by(year) %>% 
+  summarise(avg.state = mean(weighted_rate, na.rm=TRUE)) %>% 
+  drop_na()
+
+diseases.DTaP.avg.over.state <- diseases.DTaP %>% 
+  group_by(year) %>% 
+  summarise(avg.state = mean(weighted_rate, na.rm=TRUE)) %>% 
+  drop_na()
+
+
+viz.ts.diseases.MMR <- diseases.MMR.avg.over.state %>% 
+  plot_ly(x = ~year,
+          y = ~avg.state, 
+          type = 'scatter',
+          mode = 'lines'
+  ) %>%
+  layout(title = "Average Measles, Mumps, or Rubella Rates<br>(1995 - 2002)",
+         xaxis = list(title="Year"), 
+         yaxis = list(title="Percent Coverage"))
+
+viz.ts.diseases.HepA <- diseases.HepA.avg.over.state %>% 
+  plot_ly(x = ~year,
+          y = ~avg.state, 
+          type = 'scatter',
+          mode = 'lines'
+  ) %>%
+  layout(title = "Average Hepatitis A Rates<br>(2002 - 2011)",
+         xaxis = list(title="Year"), 
+         yaxis = list(title="Percent Coverage"))
+
+viz.ts.diseases.DTaP <- diseases.DTaP.avg.over.state %>% 
+  plot_ly(x = ~year,
+          y = ~avg.state, 
+          type = 'scatter',
+          mode = 'lines'
+  ) %>%
+  layout(title = "Average Pertussis (Whooping Cough) Rates<br>(1995 - 2011)",
+         xaxis = list(title="Year"), 
+         yaxis = list(title="Percent Coverage"))
+
+#####################################################
 
 # Define UI as tabbed page
 ui <- navbarPage(
   theme = "app.css",
-  title = "Visualizing Survey Bias",
-  tabPanel("Predictability",
-    fluidRow(
-      column(
-        width = 6,
-        selectizeInput(
-          "SubjectID",
-          "Subject ID", 
-          subjects_linegraph[,1],
-          selected = 3
-        )
-      ),
-      column(
-        width = 6,
-        tags$div(tags$b('"How predictable are you?"'), class = "predictabilityResponse"),
-        htmlOutput("predictabilityResponse")
-      )
-    ),
-
-    fluidRow(
-      column(width = 6, plotOutput("heatmap")),
-      column(width = 6, plotOutput("lineGraph"))
-    )
-
+  title = "Vaccinations",
+  tabPanel("MMR",
+           fluidRow(
+             column(width = 6, plotlyOutput("MMR.choropleth.vaccine")),
+             column(width = 6, plotlyOutput("MMR.choropleth.disease"))
+           ),
+           fluidRow(
+             column(width = 6, plotlyOutput("MMR.ts.vaccine")),
+             column(width = 6, plotlyOutput("MMR.ts.disease"))
+           )
   ),
- 
-  tabPanel(
-    "Friendship", 
-    forceNetworkOutput("friendNetwork")
+  tabPanel("Hep A",
+           fluidRow(
+             column(width = 6, plotlyOutput("HepA.choropleth.vaccine")),
+             column(width = 6, plotlyOutput("HepA.choropleth.disease"))
+           ),
+           fluidRow(
+             column(width = 6, plotlyOutput("HepA.ts.vaccine")),
+             column(width = 6, plotlyOutput("HepA.ts.disease"))
+           )
   ),
-
-  tabPanel("Communication",
-           plotlyOutput("boxPlot")
+  tabPanel("DTaP",
+           fluidRow(
+             column(width = 6, plotlyOutput("DTaP.choropleth.vaccine")),
+             column(width = 6, plotlyOutput("DTaP.choropleth.disease"))
+           ),
+           fluidRow(
+             column(width = 6, plotlyOutput("DTaP.ts.vaccine")),
+             column(width = 6, plotlyOutput("DTaP.ts.disease"))
+           )
   )
 )
 
@@ -140,42 +309,57 @@ ui <- navbarPage(
 # Define server logic required to draw vizzes
 server <- function(input, output) {
    
-   output$heatmap <- renderPlot({ 
-     index <- match(input$SubjectID, subjects_linegraph[,1])
-     latest_ting <- data.frame(heatmap_list[[index]])
-     
-     latest_ting[is.na(latest_ting)] <- 0
-     latest_ting[latest_ting == 3] <- 0
-     latest_ting[latest_ting == 2] <- 0
-     
-     happy <- aggregate(latest_ting[,2:25], by=list(day = latest_ting$day), FUN=sum)
-     names(happy) <- c("day",1:24)
-     happy<- happy[c(4,2,6,7,5,1,4),]
-     heatmap(as.matrix(t(happy[,2:25])), Rowv=NA, Colv=NA, col = cm.colors(256),scale="none", margins=c(8,10), labCol = c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+   # Vaccine Choropleths
+   output$MMR.choropleth.vaccine <- renderPlotly({
+     return(viz.choropleth.MMR)
    })
    
-   output$lineGraph <- renderPlot({
-     index <- match(input$SubjectID, subjects_linegraph[,1])
-     return(list_ofplots[[index]])
+   output$HepA.choropleth.vaccine <- renderPlotly({
+     return(viz.choropleth.HepA)
    })
    
-   output$boxPlot <- renderPlotly({
-     return(viz.boxplot)
+   output$DTaP.choropleth.vaccine <- renderPlotly({
+     return(viz.choropleth.DTaP)
    })
    
-   output$friendNetwork <- renderForceNetwork({
-     return(viz.forceNetwork)
+   # Disease Choropleths
+   output$MMR.choropleth.disease <- renderPlotly({
+     return(viz.choropleth.diseases.MMR)
    })
    
-   output$predictabilityResponse <- renderText({
-     t <- predictability.responses[as.integer(input$SubjectID)]
-     if (is.na(t)) {
-       t <- "No Response"
-     }
-     return(paste("<div id=predictabilityResponseResponse class=predictabilityResponse>", t, "</div>"))
+   output$HepA.choropleth.disease <- renderPlotly({
+     return(viz.choropleth.diseases.HepA)
    })
    
+   output$DTaP.choropleth.disease <- renderPlotly({
+     return(viz.choropleth.diseases.DTaP)
+   })
    
+   # Vaccine Time Series
+   output$MMR.ts.vaccine <- renderPlotly({
+     return(viz.ts.MMR)
+   })
+   
+   output$HepA.ts.vaccine <- renderPlotly({
+     return(viz.ts.HepA)
+   })
+   
+   output$DTaP.ts.vaccine <- renderPlotly({
+     return(viz.ts.DTaP)
+   })
+   
+   # Disease Time Series
+   output$MMR.ts.disease <- renderPlotly({
+     return(viz.ts.diseases.MMR)
+   })
+   
+   output$HepA.ts.disease <- renderPlotly({
+     return(viz.ts.diseases.HepA)
+   })
+   
+   output$DTaP.ts.disease <- renderPlotly({
+     return(viz.ts.diseases.DTaP)
+   })
    
 }
 
